@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Youden Plot Analysis</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS for Excel Reading -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #f4f4f5;
+            color: #18181b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            margin: 0;
+        }
+        .main-container {
+            width: 100%;
+            max-width: 1000px;
+        }
+        .report-header {
+            border-bottom: 2px solid #3f3f46;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .report-header h1 { margin: 0; font-size: 24px; font-weight: 600; color: #27272a; }
+        .report-header p { margin: 5px 0 0 0; font-size: 14px; color: #52525b; }
+        
+        /* Tabs Styling */
+        .tabs {
+            display: flex;
+            width: 100%;
+            border-bottom: 2px solid #d4d4d8;
+            margin-bottom: 20px;
+        }
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 10px 20px;
+            font-size: 15px;
+            font-weight: bold;
+            color: #a1a1aa;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        .tab-button.active {
+            color: #2563eb;
+            border-bottom: 2px solid #2563eb;
+        }
+        .tab-button:hover:not(.active) {
+            color: #3f3f46;
+        }
+
+        .controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: #ffffff;
+            padding: 15px;
+            border: 1px solid #d4d4d8;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .controls label { font-size: 13px; font-weight: bold; color: #3f3f46; }
+        .controls input[type="file"], .controls select { font-size: 13px; }
+        .exclusion-panel {
+            background: #ffffff;
+            padding: 10px 15px;
+            border: 1px solid #d4d4d8;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            display: none;
+        }
+        .exclusion-panel strong { display: block; margin-bottom: 5px; color: #dc2626; }
+        .exclude-label {
+            display: inline-block;
+            margin-right: 15px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            color: #3f3f46;
+        }
+        
+        .chart-box, .math-section {
+            background: #ffffff;
+            padding: 30px;
+            border: 1px solid #d4d4d8;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        .legend-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+            padding: 10px;
+            background: #fafafa;
+            border: 1px solid #e4e4e7;
+        }
+        .indicator-item { display: flex; align-items: center; font-size: 12px; }
+        .color-box { width: 12px; height: 12px; margin-right: 6px; border: 1px solid #a1a1aa; }
+        
+        .math-section h3 {
+            margin-top: 0;
+            color: #18181b;
+            border-bottom: 1px solid #e4e4e7;
+            padding-bottom: 8px;
+            font-size: 18px;
+        }
+        .math-section p, .math-section li {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #3f3f46;
+        }
+        .math-section code {
+            background: #f4f4f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 13px;
+            color: #dc2626;
+        }
+        .topic-header {
+            font-weight: 600;
+            color: #27272a;
+            margin-top: 25px;
+            margin-bottom: 5px;
+        }
+
+        .report-footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #52525b;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="report-header">
+            <div>
+                <h1>Inter-Laboratory Youden Summary Report</h1>
+                <p>Interactive Dual-Sample Consistency Assessment</p>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('plotTab', this)">Plot Interface</button>
+            <button class="tab-button" onclick="switchTab('mathTab', this)">Calculation Methodology</button>
+            <button class="tab-button" onclick="switchTab('discussTab', this)">Interpretation & Discussion</button>
+        </div>
+
+        <!-- PLOT TAB -->
+        <div id="plotTab" class="tab-content" style="display: block;">
+            <div class="controls">
+                <div><label>Upload Excel:</label> <input type="file" id="excelUpload" accept=".xlsx, .xls"></div>
+                <div id="sheetWrapper" style="display:none">
+                    <label>Worksheet:</label> <select id="sheetSelector"></select>
+                </div>
+                <div style="margin-left: auto;">
+                    <button id="toggleBtn" onclick="toggleRobust()" style="padding: 8px 15px; font-size: 13px; font-weight: bold; background: #2563eb; color: #ffffff; border: none; border-radius: 4px; cursor: pointer;">Using: Robust Bounds (MAD)</button>
+                </div>
+            </div>
+
+            <div class="exclusion-panel" id="exclusionPanel">
+                <strong>Check to Exclude Labs:</strong>
+                <div id="exclusionList"></div>
+            </div>
+
+            <div class="chart-box">
+                <h2 id="chartTitle" style="text-align: center; margin-top: 0; font-size: 18px; color: #18181b;">Demo Dataset</h2>
+                <canvas id="youdenChart"></canvas>
+                <div class="legend-indicator">
+                    <div class="indicator-item"><div class="color-box" style="background:#f97316; border-color:#ea580c"></div> Datapoint (Lab ID)</div>
+                    <div class="indicator-item"><div class="color-box" style="background:#18181b;"></div> Median Intersects</div>
+                    <div class="indicator-item"><div class="color-box" style="background:#18181b;"></div> 45° Reference Axis</div>
+                    <div class="indicator-item"><div class="color-box" style="background:rgba(234, 179, 8, 0.2); border-color:#dc2626; border-width: 2px;"></div> 95% Confidence Bounds</div>
+                </div>
+            </div>
+            
+            <div class="report-footer">
+                <strong>Interpretation Reference:</strong><br/>
+                This plot isolates and visualizes measurement bias across two samples. Points along the solid 45-degree axis demonstrate structured **systematic error**. Points scattered away perpendicularly from the axis exhibit independent **random error**. Points found completely outside the 95% confidence ellipse bounds are classically considered outlier anomalies requiring secondary review.
+            </div>
+        </div>
+
+        <!-- MATH TAB -->
+        <div id="mathTab" class="tab-content" style="display: none;">
+            <div class="math-section">
+                <h3>Statistical Engine & Methodology</h3>
+                <p>Curious about how the lines, ellipses, and layouts are actually generated behind the scenes? Here is a breakdown of the mathematical engines powering this analytical tool.</p>
+
+                <div class="topic-header">I. The 95% Confidence Ellipse (Probability Bounds)</div>
+                <p>The yellow dashed oval represents a 95% confidence region spanning across the 2-dimensional normal distribution of the dataset matrix. It is computed actively via JavaScript linear algebra using the following steps:</p>
+                <ul>
+                    <li><strong>Robust Covariance (MAD):</strong> Standard variances are easily corrupted by extreme outliers. This tool explicitly integrates <strong>Median Absolute Deviation (MAD)</strong> robust statistics. MAD evaluates the median of data deviations, granting the ellipse a 50% breakdown threshold (up to 49% of points could be massive outliers and the ellipse would remain anchored around the true consensus cohort).</li>
+                    <li><strong>Eigenvalues:</strong> From this robust subset matrix, we determine the mathematical Trace and Determinant to calculate the primary Eigenvalues (<code>λ1</code> and <code>λ2</code>). These eigenvalues explicitly represent the exact robust lengths of the ellipse's semi-major and semi-minor axes.</li>
+                    <li><strong>Median Centering:</strong> The center focal point of the ellipse is strictly anchored to the exact intersection of the Sample 1 and Sample 2 Medians, rather than the arithmetic mean.</li>
+                    <li><strong>Chi-Square Sizing:</strong> To ensure the ellipse precisely represents a 95% confidence interval for exactly 2 degrees of freedom, the eigenvalues are multiplied by the specific Chi-Square critical value threshold of <code>5.991</code> before plotting.</li>
+                </ul>
+
+                <div class="topic-header">II. The Median Lines (Black)</div>
+                <p>Unlike standard scatter plots that draw crosshairs at the arithmetic mean, Youden Plots exclusively utilize the statistical <strong>Median</strong> of the datasets. Why? Medians isolate the "true" central tendency of the participating laboratories entirely protecting the center axis from being drastically skewed by a single massive outlier point (which would instantly ruin an arithmetic average).</p>
+
+                <div class="topic-header">III. The 45-Degree Axis (Black)</div>
+                <p>Because the provided samples are meant to be <strong>blind identical duplicates</strong>, the initial overarching baseline is the absolute identity line (<code>Y = X</code>). However, to forgive microscopic global degradation between batch transit and testing (which shifts the whole cluster), the line's exact 45-degree slope is deliberately shifted mathematically to intersect the exact <strong>Median Consensus point</strong>. Any lab mapped consistently along this shifted diagonal pathway is exhibiting classic <strong>Systematic Calibration Bias</strong> relative to their peers.</p>
+
+                <div class="topic-header">IV. Leader-Line Collision Physics (Labels)</div>
+                <p>Because multiple laboratories will inevitably have very similar data, their text labels will normally overlap and become utterly unreadable. This tool runs a custom physics algorithm inside your browser canvas:</p>
+                <ul>
+                    <li>It calculates bounding-box width/height measurements for every text object.</li>
+                    <li>If it detects intersecting geometries, it activates a <strong>Spiral Radial Search</strong>. Meaning, the algorithm shifts the label mathematically outward in expanding circular increments (<code>angle += 0.5</code>) until it finds a clean region of whitespace.</li>
+                    <li>Once cleared, it drops the label text and draws a grey pointer line tracing back precisely to the source coordinate node.</li>
+                </ul>
+
+                <div class="topic-header">V. Geometric Shape Anatomy (The Math Behind the Ellipse)</div>
+                <p>The visual dimensions of the 95% confidence ellipse provide instant macroscopic diagnostics for the entire laboratory cohort. Morphologically, the ellipse is constructed from the dataset's mathematical <strong>Covariance Matrix</strong> and its fundamental <strong>Eigenvalues</strong> (<code>λ1</code>, <code>λ2</code>). The geometry implies the following:</p>
+                <ul>
+                    <li><strong>Extended & Cigar-Shaped (High Covariance):</strong> The length of the ellipse moving along the 45-degree axis is powered by the Primary Eigenvalue (<code>λ1</code>). Biologically, this length represents <em>Systematic Calibration Bias</em>. If your laboratories are routinely incorrectly calibrated, but highly internally precise, their Sample 1 errors will perfectly mirror their Sample 2 errors. Mathematically, this produces an incredibly high Covariance <code>Cov(X,Y)</code>. A massive covariance maximizes the first eigenvalue while minimizing the second, stretching the ellipse entirely diagonally.</li>
+                    <li><strong>Incredibly Thin (Zero Random Error):</strong> The width of the ellipse (stretching perpendicularly away from the diagonal axis) is controlled by the Secondary Eigenvalue (<code>λ2</code>). This mathematically represents pure <em>Random Error</em> (unpredictable noise). As the mathematical Pearson Correlation Coefficient between your samples approaches <code>1.0</code>, the determinant of the covariance matrix shrinks. Consequently, <code>λ2</code> approaches absolute zero, forcing the width of the shape to compress toward zero. An extremely thin ellipse means your labs have spectacular internal precision; their only failing is strict mechanical calibration.</li>
+                    <li><strong>Spherical & Circular (Zero Covariance):</strong> If the ellipse inflates into a fat circle, it mathematically indicates that <code>Cov(X,Y)</code> has collapsed toward zero, meaning <code>λ1 ≈ λ2</code>. Visually, this means there is almost no correlation between a lab's performance on Sample 1 and Sample 2. Diagnostically, this represents a chaotic testing environment crippled by extreme, unpredictable Random Error drowning out any calibration biases.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- DISCUSSION TAB -->
+        <div id="discussTab" class="tab-content" style="display: none;">
+            <div class="math-section">
+                <h3>Interpreting the Youden Plot</h3>
+                <p>A Youden Plot is a powerful graphical technique used to analyze inter-laboratory data by plotting measurements of two distinct, but similar, samples. Here is how to formally discuss and interpret the visual outcomes of this plot in your reports:</p>
+
+                <div class="topic-header">1. The Ideal Result (High Consensus)</div>
+                <p>In an ideal scenario, all laboratory data points will cluster tightly around the crossing solid black <strong>Median intersection</strong>. A tight cluster implies that all participating labs exhibit excellent precision and accuracy, with minimal variance between testing methodologies.</p>
+
+                <div class="topic-header">2. Systematic Error (Calibration Bias)</div>
+                <p>If you observe data points stretched far out along the solid black <strong>45-Degree Reference Axis</strong> (towards the upper-right or lower-left quadrants), this is the classic signature of <em>Systematic Error</em>. This occurs when a laboratory is measuring <strong>both</strong> samples incorrectly by the exact same proportion. Common causes include improperly calibrated instruments, degraded standard reagents, or a consistent technician error running across all batches.</p>
+
+                <div class="topic-header">3. Random Error (Procedural Imprecision)</div>
+                <p>If data points drift far off perpendicularly away from the 45-degree axis (into the upper-left or lower-right quadrants), this indicates <em>Random Error</em>. In this case, a lab measured one sample too high, but the other sample too low. This usually points to poor internal repeatability, inconsistent procedural execution, or random contamination in specific aliquots rather than an overarching machine calibration failure.</p>
+
+                <div class="topic-header">4. Outliers & The 95% Confidence Ellipse</div>
+                <p>The solid red ellipse represents the 95% statistical confidence interval. Laboratories residing safely inside the ellipse are statistically aligned with the general consensus group. Any lab mapped <strong>completely outside</strong> the perimeter of this ellipse is designated as an outlier. These labs require formal corrective action investigations to identify why their results statistically deviate from the industry aggregate.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function switchTab(tabId, buttonElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(tabId).style.display = 'block';
+            buttonElement.classList.add('active');
+        }
+
+        let currentChart = null;
+        window.currentWorkbook = null;
+        let globalRawData = []; 
+        let globalCurrentTitle = "";
+        let globalXLabel = "Sample 1 Value";
+        let globalYLabel = "Sample 2 Value";
+
+        function generateDemoData() {
+            const numLabs = 25; const trueValue = 100; const pts = [];
+            for (let i = 0; i < numLabs; i++) {
+                pts.push({ 
+                    x: trueValue + (Math.random()-0.5)*6 + (Math.random()-0.5)*4, 
+                    y: trueValue + (Math.random()-0.5)*6 + (Math.random()-0.5)*4, 
+                    lab: `L${i+1}` 
+                });
+            }
+            pts[5].x += 18; pts[14].x += 15; pts[14].y += 15; pts[20].y -= 16;
+            return pts;
+        }
+
+        let useRobustStatistics = true;
+
+        function toggleRobust() {
+            useRobustStatistics = !useRobustStatistics;
+            let btn = document.getElementById("toggleBtn");
+            btn.innerText = useRobustStatistics ? "Using: Robust Bounds (MAD)" : "Using: Standard Bounds (Mean)";
+            btn.style.background = useRobustStatistics ? "#2563eb" : "#52525b";
+            if (globalRawData.length > 0) { handleExclusionChange(); }
+        }
+
+        function getEllipseParams(points) {
+            let n = points.length; if (n < 2) return null;
+            let xs = points.map(p => p.x).sort((a,b)=>a-b);
+            let ys = points.map(p => p.y).sort((a,b)=>a-b);
+            let medianX = xs[Math.floor(n/2)];
+            let medianY = ys[Math.floor(n/2)];
+
+            let covXX, covYY, covXY;
+            
+            if (useRobustStatistics) {
+                let madX = [...points].map(p => Math.abs(p.x - medianX)).sort((a,b)=>a-b)[Math.floor(n/2)];
+                let madY = [...points].map(p => Math.abs(p.y - medianY)).sort((a,b)=>a-b)[Math.floor(n/2)];
+                
+                let sx = 1.4826 * madX; let sy = 1.4826 * madY;
+                covXX = sx*sx; covYY = sy*sy;
+                if (covXX === 0) covXX = 1e-4;
+                if (covYY === 0) covYY = 1e-4;
+                
+                let us = points.map(p => p.x + p.y).sort((a,b)=>a-b);
+                let vs = points.map(p => p.x - p.y).sort((a,b)=>a-b);
+                let medU = us[Math.floor(n/2)]; let medV = vs[Math.floor(n/2)];
+                
+                let madU = [...points].map(p => Math.abs((p.x + p.y) - medU)).sort((a,b)=>a-b)[Math.floor(n/2)];
+                let madV = [...points].map(p => Math.abs((p.x - p.y) - medV)).sort((a,b)=>a-b)[Math.floor(n/2)];
+                
+                let su = 1.4826 * madU; let sv = 1.4826 * madV;
+                covXY = ((su*su) - (sv*sv)) / 4.0;
+
+                // Enforce inequality constraint for Positive-Semi-Definite Matrix
+                let maxCov = Math.sqrt(covXX * covYY) * 0.99;
+                if (covXY > maxCov) covXY = maxCov;
+                if (covXY < -maxCov) covXY = -maxCov;
+            } else {
+                let sumX = 0, sumY = 0; points.forEach(p => { sumX += p.x; sumY += p.y; });
+                medianX = sumX / n; medianY = sumY / n; // override to mean to fallback cleanly
+                covXX = 0; covYY = 0; covXY = 0;
+                points.forEach(p => {
+                    covXX += (p.x - medianX)*(p.x - medianX);
+                    covYY += (p.y - medianY)*(p.y - medianY);
+                    covXY += (p.x - medianX)*(p.y - medianY);
+                });
+                covXX /= (n - 1); covYY /= (n - 1); covXY /= (n - 1);
+            }
+
+            if(covXX === 0 && covYY === 0) return null;
+            let trace = covXX + covYY; let det = (covXX * covYY) - (covXY * covXY);
+            let discriminant = (trace * trace / 4) - det; if (discriminant < 0) discriminant = 0;
+            
+            let l1 = (trace / 2) + Math.sqrt(discriminant); let l2 = (trace / 2) - Math.sqrt(discriminant);
+            let radX = Math.sqrt(l1 * 5.991); let radY = Math.sqrt(l2 * 5.991); // 5.991 is chi-square
+
+            let angle = 0; if (covXY !== 0) { angle = Math.atan2(l1 - covXX, covXY); }
+            return { meanX: medianX, meanY: medianY, radX, radY, angle };
+        }
+
+        function generateEllipsePoints(points, numPoints=100) {
+            let p = getEllipseParams(points); let ellipseData = [];
+            if (!p || isNaN(p.radX) || isNaN(p.radY)) return ellipseData;
+            for(let i=0; i<=numPoints; i++) {
+                let t = i * 2 * Math.PI / numPoints;
+                let xt = p.radX * Math.cos(t); let yt = p.radY * Math.sin(t);
+                let xrot = xt * Math.cos(p.angle) - yt * Math.sin(p.angle);
+                let yrot = xt * Math.sin(p.angle) + yt * Math.cos(p.angle);
+                ellipseData.push({ x: p.meanX + xrot, y: p.meanY + yrot });
+            }
+            return ellipseData;
+        }
+
+        function updateChart(dataPoints, title, xlabel, ylabel) {
+            if(currentChart) currentChart.destroy();
+            document.getElementById("chartTitle").innerText = title;
+
+            let xs = dataPoints.map(p => p.x).sort((a,b) => a-b);
+            let ys = dataPoints.map(p => p.y).sort((a,b) => a-b);
+            let medianX = xs.length ? xs[Math.floor(xs.length / 2)] : 0;
+            let medianY = ys.length ? ys[Math.floor(ys.length / 2)] : 0;
+
+            const ellipseDataset = {
+                type: 'line', label: '95% Confidence Ellipse',
+                data: generateEllipsePoints(dataPoints),
+                borderColor: '#dc2626', backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                borderWidth: 2, borderDash: [], fill: true, pointRadius: 0, pointHoverRadius: 0
+            };
+
+            const rectsOverlap = (r1, r2, pad) => {
+                return !(r2.left > r1.right + pad || r2.right < r1.left - pad || 
+                         r2.top > r1.bottom + pad || r2.bottom < r1.top - pad);
+            }
+
+            const customLogicPlugin = {
+                id: 'customLogic',
+                beforeDatasetsDraw: (chart) => {
+                    if(dataPoints.length === 0) return;
+                    const ctx = chart.ctx; const xAxis = chart.scales.x; const yAxis = chart.scales.y;
+                    ctx.save();
+                    ctx.beginPath(); ctx.strokeStyle = '#18181b'; ctx.lineWidth = 1.2;
+                    let mxPixel = xAxis.getPixelForValue(medianX);
+                    ctx.moveTo(mxPixel, yAxis.top); ctx.lineTo(mxPixel, yAxis.bottom); ctx.stroke();
+
+                    ctx.beginPath(); ctx.strokeStyle = '#18181b'; ctx.lineWidth = 1.2;
+                    let myPixel = yAxis.getPixelForValue(medianY);
+                    ctx.moveTo(xAxis.left, myPixel); ctx.lineTo(xAxis.right, myPixel); ctx.stroke();
+
+                    ctx.beginPath(); ctx.strokeStyle = '#18181b'; ctx.lineWidth = 1.2;
+                    const pt1X = xAxis.min; const pt1Y = pt1X - medianX + medianY;
+                    const pt2X = xAxis.max; const pt2Y = pt2X - medianX + medianY;
+                    ctx.moveTo(xAxis.getPixelForValue(pt1X), yAxis.getPixelForValue(pt1Y));
+                    ctx.lineTo(xAxis.getPixelForValue(pt2X), yAxis.getPixelForValue(pt2Y));
+                    ctx.stroke(); ctx.restore();
+                },
+                afterDatasetsDraw: (chart) => {
+                    const ctx = chart.ctx; const xAxis = chart.scales.x; const yAxis = chart.scales.y;
+                    ctx.save(); ctx.font = '10px Helvetica Neue'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    const placedRects = [];
+                    dataPoints.forEach((point) => {
+                        let px = xAxis.getPixelForValue(point.x); let py = yAxis.getPixelForValue(point.y);
+                        let textW = ctx.measureText(point.lab).width; let textH = 10;
+                        let angle = -Math.PI/2; let dist = 18;
+                        let tx = px + Math.cos(angle)*dist; let ty = py + Math.sin(angle)*dist;
+                        let rect = { left: tx - textW/2, right: tx + textW/2, top: ty - textH/2, bottom: ty + textH/2 };
+                        
+                        let step = 0;
+                        while(placedRects.some(r => rectsOverlap(rect, r, 2)) && step < 200) {
+                            step++; angle += 0.5; dist += 1;
+                            tx = px + Math.cos(angle)*dist; ty = py + Math.sin(angle)*dist;
+                            rect.left = tx - textW/2; rect.right = tx + textW/2;
+                            rect.top = ty - textH/2; rect.bottom = ty + textH/2;
+                        }
+                        placedRects.push(rect);
+                        
+                        if(dist > 0) {
+                            ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(tx, ty);
+                            ctx.strokeStyle = '#a1a1aa'; ctx.lineWidth = 0.8; ctx.stroke();
+                        }
+                        ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(rect.left, rect.top, textW, textH);
+                        ctx.fillStyle = '#3f3f46'; ctx.fillText(point.lab, tx, ty);
+                    });
+                    ctx.restore();
+                }
+            };
+
+            const canvas = document.getElementById('youdenChart');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.style.maxHeight = '';
+            canvas.style.maxWidth = '';
+            canvas.style.margin = '';
+
+            currentChart = new Chart(ctx, {
+                data: {
+                    datasets: [ellipseDataset, {
+                        type: 'scatter', label: 'Lab Datapoints',
+                        data: dataPoints, backgroundColor: '#f97316', borderColor: '#ea580c',
+                        pointRadius: 4, pointHoverRadius: 6,
+                        datalabels: { display: false }
+                    }]
+                },
+                options: {
+                    responsive: true, animation: false, layout: { padding: 40 },
+                    plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                    scales: {
+                        x: { type: 'linear', position: 'bottom', title: { display: true, text: xlabel, color: '#18181b', font: { weight: 'bold', size: 12 } }, grid: { display: false } },
+                        y: { title: { display: true, text: ylabel, color: '#18181b', font: { weight: 'bold', size: 12 } }, grid: { display: false } }
+                    }
+                },
+                plugins: [customLogicPlugin]
+            });
+        }
+
+        function populateExclusionList() {
+            let container = document.getElementById('exclusionList'); container.innerHTML = '';
+            globalRawData.forEach(p => {
+                let lbl = document.createElement('label'); lbl.className = 'exclude-label';
+                let cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = p.lab; cb.onchange = handleExclusionChange;
+                lbl.appendChild(cb); lbl.appendChild(document.createTextNode(' ' + p.lab));
+                container.appendChild(lbl);
+            });
+            document.getElementById('exclusionPanel').style.display = 'block';
+        }
+
+        function handleExclusionChange() {
+            let cbs = document.querySelectorAll('#exclusionList input[type="checkbox"]:checked');
+            let excluded = Array.from(cbs).map(cb => cb.value);
+            let filtered = globalRawData.filter(p => !excluded.includes(p.lab));
+            updateChart(filtered, globalCurrentTitle, globalXLabel, globalYLabel);
+        }
+
+        document.getElementById('excelUpload').addEventListener('change', function(e) {
+            let file = e.target.files[0]; if(!file) return;
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let data = e.target.result; let workbook = XLSX.read(data, {type: 'binary'});
+                window.currentWorkbook = workbook;
+                let selector = document.getElementById('sheetSelector'); selector.innerHTML = '';
+                workbook.SheetNames.forEach(sheetName => selector.add(new Option(sheetName, sheetName)));
+                document.getElementById('sheetWrapper').style.display = 'inline-block';
+                loadSheetData(workbook.SheetNames[0]);
+            };
+            reader.readAsBinaryString(file);
+        });
+
+        document.getElementById('sheetSelector').addEventListener('change', e => loadSheetData(e.target.value));
+
+        function loadSheetData(sheetName) {
+            let ws = window.currentWorkbook.Sheets[sheetName]; let json = XLSX.utils.sheet_to_json(ws, {header: 1}); 
+            if(json.length === 0) return;
+            globalXLabel = json[0] && json[0][1] ? String(json[0][1]) : "Sample 1 Value";
+            globalYLabel = json[0] && json[0][2] ? String(json[0][2]) : "Sample 2 Value";
+            globalRawData = [];
+            for(let i=1; i<json.length; i++) {
+                let row = json[i];
+                if(row && row.length >= 3) {
+                    let lab = row[0] !== undefined ? String(row[0]) : `L${i}`;
+                    let x = parseFloat(row[1]); let y = parseFloat(row[2]);
+                    if(!isNaN(x) && !isNaN(y)) globalRawData.push({ lab: lab, x: x, y: y });
+                }
+            }
+            if(globalRawData.length > 0) {
+                globalCurrentTitle = "Dataset: " + sheetName;
+                populateExclusionList(); handleExclusionChange();
+            } else { alert("No valid numerical data found."); }
+        }
+
+        globalRawData = generateDemoData();
+        globalCurrentTitle = "Demo Dataset (Upload Excel to Overwrite)";
+        populateExclusionList(); handleExclusionChange();
+    </script>
+</body>
+</html>
