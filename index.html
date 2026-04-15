@@ -146,6 +146,13 @@
 </head>
 <body>
     <div class="main-container">
+        <!-- Navigation Hub -->
+        <div style="background: #e4e4e7; padding: 12px 20px; border-radius: 6px; margin-bottom: 20px; font-weight: bold; display: flex; gap: 25px; align-items: center;">
+            <span style="color: #71717a; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Dashboard Menu:</span>
+            <a href="index.html" style="color: #18181b; text-decoration: underline; font-size: 15px;">📊 Youden Plot Tool</a>
+            <a href="mandel.html" style="color: #2563eb; text-decoration: none; font-size: 15px;">📈 Mandel Stats (h & k)</a>
+        </div>
+
         <div class="report-header">
             <div>
                 <h1>Inter-Laboratory Youden Summary Report</h1>
@@ -172,19 +179,20 @@
             </div>
 
             <div class="exclusion-panel" id="exclusionPanel">
-                <strong>Check to Exclude Labs:</strong>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="margin: 0;">Check to Exclude Labs:</strong>
+                    <button onclick="unselectAllLabs()" style="font-size: 11px; padding: 3px 8px; cursor: pointer; border: 1px solid #d4d4d8; background: #e4e4e7; border-radius: 4px; color: #3f3f46;">Unselect All</button>
+                </div>
                 <div id="exclusionList"></div>
             </div>
 
+            <div id="debugPanel" style="background: #fafafa; border: 1px dashed #a1a1aa; padding: 10px; margin-bottom: 20px; border-radius: 6px; font-family: SFMono-Regular, Consolas, monospace; font-size: 12px; color: #3f3f46;">
+                <strong>Debug Parameters (Temporary Rollback Feature):</strong>
+                <div id="debugOutput" style="margin-top: 5px; white-space: pre-wrap; color: #2563eb;">Calculating...</div>
+            </div>
+
             <div class="chart-box">
-                <h2 id="chartTitle" style="text-align: center; margin-top: 0; font-size: 18px; color: #18181b;">Demo Dataset</h2>
                 <canvas id="youdenChart"></canvas>
-                <div class="legend-indicator">
-                    <div class="indicator-item"><div class="color-box" style="background:#f97316; border-color:#ea580c"></div> Datapoint (Lab ID)</div>
-                    <div class="indicator-item"><div class="color-box" style="background:#18181b;"></div> Median Intersects</div>
-                    <div class="indicator-item"><div class="color-box" style="background:#18181b;"></div> 45° Reference Axis</div>
-                    <div class="indicator-item"><div class="color-box" style="background:rgba(234, 179, 8, 0.2); border-color:#dc2626; border-width: 2px;"></div> 95% Confidence Bounds</div>
-                </div>
             </div>
             
             <div class="report-footer">
@@ -249,6 +257,14 @@
 
                 <div class="topic-header">4. Outliers & The 95% Confidence Ellipse</div>
                 <p>The solid red ellipse represents the 95% statistical confidence interval. Laboratories residing safely inside the ellipse are statistically aligned with the general consensus group. Any lab mapped <strong>completely outside</strong> the perimeter of this ellipse is designated as an outlier. These labs require formal corrective action investigations to identify why their results statistically deviate from the industry aggregate.</p>
+
+                <div class="topic-header">5. Ellipse Tilt Angle (Unequal Errors)</div>
+                <p>Normally, a Youden Plot tests two similar samples. If a lab's instrument reads 10% too high, the error is equal on both samples. When graphed, these equal mistakes form a perfect 45-degree diagonal line (like a staircase going up 1 step and over 1 step). Thus, the ellipse stretches perfectly along that 45-degree angle.</p>
+                <p>However, if the ellipse is tilted <strong>steeper</strong> (pointing more upwards limit) or <strong>flatter</strong> (pointing more sideways), it means laboratories are making much bigger mistakes on one sample than the other. This usually happens for two reasons:</p>
+                <ul>
+                    <li><strong>Different Concentrations:</strong> Sample 2 has a much higher concentration than Sample 1. An uncalibrated machine might make only a tiny mistake at low levels, but a huge mistake at high levels, causing the ellipse to tilt toward the axis of the higher sample.</li>
+                    <li><strong>Sample Interference:</strong> Sample 2 is mixed with a different preservative or chemical formula that confuses the testing machines, causing labs to fail harder on Sample 2 compared to Sample 1.</li>
+                </ul>
             </div>
         </div>
 
@@ -345,7 +361,7 @@
             let radX = Math.sqrt(l1 * 5.991); let radY = Math.sqrt(l2 * 5.991); // 5.991 is chi-square
 
             let angle = 0; if (covXY !== 0) { angle = Math.atan2(l1 - covXX, covXY); }
-            return { meanX: medianX, meanY: medianY, radX, radY, angle };
+            return { meanX: medianX, meanY: medianY, radX, radY, angle, covXX, covYY, covXY, trace, det };
         }
 
         function generateEllipsePoints(points, numPoints=100) {
@@ -363,7 +379,17 @@
 
         function updateChart(dataPoints, title, xlabel, ylabel) {
             if(currentChart) currentChart.destroy();
-            document.getElementById("chartTitle").innerText = title;
+
+            let ep = getEllipseParams(dataPoints);
+            if(ep) {
+                document.getElementById('debugOutput').innerText = 
+                    `Med X: ${ep.meanX.toFixed(2)} | Med Y: ${ep.meanY.toFixed(2)}\n` +
+                    `CovXX: ${ep.covXX.toFixed(2)} | CovYY: ${ep.covYY.toFixed(2)} | CovXY: ${ep.covXY.toFixed(2)}\n` +
+                    `Trace: ${ep.trace.toFixed(2)} | Determinant: ${ep.det.toFixed(2)}\n` +
+                    `Angle (Theta): ${(ep.angle * (180/Math.PI)).toFixed(2)}°  (${ep.angle.toFixed(4)} rad)`;
+            } else {
+                document.getElementById('debugOutput').innerText = "Not enough data for parameters.";
+            }
 
             let xs = dataPoints.map(p => p.x).sort((a,b) => a-b);
             let ys = dataPoints.map(p => p.y).sort((a,b) => a-b);
@@ -444,15 +470,21 @@
             currentChart = new Chart(ctx, {
                 data: {
                     datasets: [ellipseDataset, {
-                        type: 'scatter', label: 'Lab Datapoints',
+                        type: 'scatter', label: 'Lab Datapoints (ID)',
                         data: dataPoints, backgroundColor: '#f97316', borderColor: '#ea580c',
-                        pointRadius: 4, pointHoverRadius: 6,
+                        pointRadius: 3.2, pointHoverRadius: 4.8,
                         datalabels: { display: false }
-                    }]
+                    },
+                    { type: 'line', label: '45° Reference Axis', borderColor: '#18181b', backgroundColor: '#18181b', borderWidth: 1.2, borderDash: [5, 5], data: [] }
+                    ]
                 },
                 options: {
                     responsive: true, animation: false, layout: { padding: 40 },
-                    plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                    plugins: { 
+                        legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 12 } } },
+                        title: { display: true, text: "Youden Plot: " + title, font: { size: 18, weight: 'bold', family: 'Helvetica Neue' }, color: '#18181b', padding: { bottom: 20 } },
+                        tooltip: { enabled: true } 
+                    },
                     scales: {
                         x: { type: 'linear', position: 'bottom', title: { display: true, text: xlabel, color: '#18181b', font: { weight: 'bold', size: 12 } }, grid: { display: false } },
                         y: { title: { display: true, text: ylabel, color: '#18181b', font: { weight: 'bold', size: 12 } }, grid: { display: false } }
@@ -460,6 +492,11 @@
                 },
                 plugins: [customLogicPlugin]
             });
+        }
+
+        function unselectAllLabs() {
+            document.querySelectorAll('#exclusionList input[type="checkbox"]').forEach(cb => cb.checked = false);
+            handleExclusionChange();
         }
 
         function populateExclusionList() {
@@ -499,8 +536,8 @@
         function loadSheetData(sheetName) {
             let ws = window.currentWorkbook.Sheets[sheetName]; let json = XLSX.utils.sheet_to_json(ws, {header: 1}); 
             if(json.length === 0) return;
-            globalXLabel = json[0] && json[0][1] ? String(json[0][1]) : "Sample 1 Value";
-            globalYLabel = json[0] && json[0][2] ? String(json[0][2]) : "Sample 2 Value";
+            globalXLabel = json[0] && json[0][1] ? "Sample " + String(json[0][1]) : "Sample 1 Value";
+            globalYLabel = json[0] && json[0][2] ? "Sample " + String(json[0][2]) : "Sample 2 Value";
             globalRawData = [];
             for(let i=1; i<json.length; i++) {
                 let row = json[i];
@@ -511,7 +548,7 @@
                 }
             }
             if(globalRawData.length > 0) {
-                globalCurrentTitle = "Dataset: " + sheetName;
+                globalCurrentTitle = sheetName;
                 populateExclusionList(); handleExclusionChange();
             } else { alert("No valid numerical data found."); }
         }
