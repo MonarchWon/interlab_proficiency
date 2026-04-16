@@ -510,7 +510,7 @@
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     plugins: { 
-                        legend: { display: false },
+                        legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
                         annotation: { annotations: hAnnotations },
                         tooltip: { callbacks: { label: (ctx) => `h score: ${ctx.raw.toFixed(3)}` } }
                     },
@@ -535,7 +535,7 @@
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     plugins: { 
-                        legend: { display: false },
+                        legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
                         annotation: { annotations: kAnnotations },
                         tooltip: { callbacks: { label: (ctx) => `k score: ${ctx.raw.toFixed(3)}` } }
                     },
