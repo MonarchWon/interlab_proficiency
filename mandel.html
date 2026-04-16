@@ -242,6 +242,23 @@
                 </div>
             </div>
             
+            <!-- Custom HTML Legend -->
+            <div style="display: flex; justify-content: center; gap: 25px; flex-wrap: wrap; margin-top: 25px; margin-bottom: 5px; font-size: 13px; color: #3f3f46; font-weight: bold; background: #ffffff; padding: 12px; border: 1px solid #d4d4d8; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <span style="color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; font-size: 12px;">Threshold Key:</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; width: 30px; height: 2px; background-color: #18181b;"></span>
+                    <span>Consensus Average</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; width: 30px; border-top: 2px dashed #eab308;"></span>
+                    <span>5% Warning Limit (Straggler)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; width: 30px; border-top: 2px dashed #dc2626;"></span>
+                    <span>1% Action Limit (Outlier)</span>
+                </div>
+            </div>
+
             <div class="report-footer">
                 <strong>Data Structure Requirement:</strong><br/>
                 Please upload an Excel file where the first row contains headers. Column A should contain your Laboratory Identifiers (e.g., "Lab 1"). Columns B, C, D, etc., should contain numerical replicate measurements for a <strong>single test level/sample</strong>. The tool will parse all available numerical columns per row.
